@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>첫인상 & 현인상 표 메이커</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Black Han Sans & Noto Sans KR (첨부 이미지의 강렬한 고딕 타이틀 느낌 구현) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- html2canvas: 완성된 표를 고화질 이미지로 저장하기 위한 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            user-select: none;
+        }
+
+        .font-title {
+            font-family: 'Black Han Sans', sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        /* 캔버스 영역 내 이미지 드래그 및 줌 스타일 */
+        .image-slot {
+            position: relative;
+            overflow: hidden;
+            aspect-ratio: 1 / 1;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .image-slot.active-slot {
+            outline: 3px solid #FFE600;
+            outline-offset: -3px;
+            z-index: 10;
+        }
+
+        .slot-img {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
+            max-width: none;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .slot-img:active {
+            cursor: grabbing;
+        }
+
+        /* 커스텀 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+
+        /* 레인지 슬라이더 커스텀 */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #FFE600;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #3f3f46;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center pb-28">
+
+    <!-- 상단 컨트롤 바 -->
+    <header class="w-full bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800 sticky top-0 z-40 px-4 py-3">
+        <div class="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="bg-[#FFE600] text-black font-black px-2.5 py-1 rounded text-sm">TEMPLATE</span>
+                <h1 class="font-bold text-base sm:text-lg text-zinc-100">첫인상 & 현인상 표 메이커</h1>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- 친구와 함께하기(방 공유) 버튼 -->
+                <button id="shareRoomBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs sm:text-sm font-bold text-white shadow-md transition flex items-center gap-1.5" title="친구에게 템플릿 배포 및 공유">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    <span id="roomStatusLabel">템플릿 공유</span>
+                </button>
+
+                <!-- 테마 컬러 변경 토글 -->
+                <button id="toggleThemeBtn" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs sm:text-sm font-medium text-zinc-200 border border-zinc-700 transition flex items-center gap-1.5" title="배경색 전환 (블랙 / 화이트)">
+                    <i class="fa-solid fa-circle-half-stroke text-[#FFE600]"></i>
+                    <span id="themeLabel">다크 테마</span>
+                </button>
+
+                <!-- 빈칸/예시 초기화 -->
+                <button id="resetBtn" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs sm:text-sm font-medium text-zinc-200 border border-zinc-700 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span class="hidden sm:inline">초기화</span>
+                </button>
+
+                <!-- 이미지 저장 버튼 -->
+                <button id="downloadBtn" class="px-4 py-1.5 rounded-lg bg-[#FFE600] hover:bg-yellow-300 text-black font-bold text-xs sm:text-sm shadow-lg shadow-yellow-500/20 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-download"></i>
+                    <span>이미지로 저장</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 안내 메시지 및 타이틀 커스텀 영역 -->
+    <div class="w-full max-w-2xl px-4 mt-6 mb-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-xl">
+            <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                <div class="flex-1">
+                    <label class="block text-xs font-bold text-zinc-400 mb-1">포인트 메인 제목 (예: 작품명, 그룹명)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="mainTitleInput" value="스텔라이브" maxlength="10" placeholder="제목 입력"
+                            class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-[#FFE600] transition">
+                        <input type="color" id="titleColorInput" value="#8B9EE7" title="제목 색상 선택"
+                            class="w-11 h-10 p-1 bg-zinc-800 border border-zinc-700 rounded-xl cursor-pointer">
+                    </div>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs font-bold text-zinc-400 mb-1">서브 타이틀</label>
+                    <input type="text" id="subTitleInput" value="첫인상 & 현인상 표" maxlength="20" placeholder="서브 타이틀 입력"
+                        class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-[#FFE600] transition">
+                </div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+                <span><i class="fa-solid fa-hand-pointer text-[#FFE600] mr-1"></i> 칸을 클릭해 사진 첨부 / 사진 드래그로 위치 조절</span>
+                <div class="flex items-center gap-2">
+                    <span>칸 간격:</span>
+                    <button onclick="changeGap('tight')" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300">좁게</button>
+                    <button onclick="changeGap('normal')" class="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300">보통</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 실제 캡처/저장되는 표 캔버스 영역 -->
+    <main class="w-full max-w-2xl px-4 flex flex-col items-center">
+        <div id="captureArea" class="w-full bg-[#000000] text-white p-6 sm:p-10 shadow-2xl transition-colors duration-300">
+            
+            <!-- 상단 헤더 타이틀 영역 (첨부 이미지 레퍼런스 스타일 반영) -->
+            <div class="flex items-center justify-center gap-3 sm:gap-5 mb-6 sm:mb-8">
+                <div id="displayMainTitle" class="font-title text-6xl sm:text-8xl leading-none tracking-tight text-[#8B9EE7] break-keep text-center" style="transform: scaleY(1.15); color: rgb(139, 158, 231);">
+                    스텔라이브
+                </div>
+                <div id="displaySubTitle" class="font-title text-2xl sm:text-4xl leading-tight tracking-tight text-white">
+                    첫인상 &amp; 현인상 표
+                </div>
+            </div>
+
+            <!-- 열(Column) 헤더 -->
+            <div id="columnHeaders" class="grid grid-cols-3 gap-3 sm:gap-5 mb-2 sm:mb-3 text-center">
+                <!-- 1열: 캐릭터 칸 위는 비워두거나 라벨 표시 (레퍼런스 이미지처럼 깔끔하게 비워둠, 호버시 안내) -->
+                <div class="flex items-end justify-center">
+                    <span class="text-xs sm:text-sm font-bold opacity-0 select-none">캐릭터</span>
+                </div>
+                <!-- 2열: 첫인상 -->
+                <div class="flex items-end justify-center">
+                    <span contenteditable="true" id="col1Header" class="font-title text-lg sm:text-2xl border-b-2 border-current pb-0.5 px-1 outline-none focus:border-[#FFE600]">첫인상</span>
+                </div>
+                <!-- 3열: 현인상 -->
+                <div class="flex items-end justify-center">
+                    <span contenteditable="true" id="col2Header" class="font-title text-lg sm:text-2xl border-b-2 border-current pb-0.5 px-1 outline-none focus:border-[#FFE600]">현인상</span>
+                </div>
+            </div>
+
+            <!-- 동적으로 행이 추가되는 그리드 컨테이너 -->
+            <div id="rowsContainer" class="flex flex-col gap-3 sm:gap-5">
+                <!-- JavaScript로 초기 5행 생성 -->
+            </div>
+
+        </div>
+
+        <!-- 행 추가 / 삭제 컨트롤 버튼 영역 (캡처 영역 외부) -->
+        <div class="w-full mt-5 flex flex-wrap items-center justify-center gap-3">
+            <button id="addRowBtn" class="flex-1 sm:flex-none px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-white font-bold text-sm border border-zinc-700 shadow-lg transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-plus text-[#FFE600]"></i>
+                <span>칸(행) 추가하기</span>
+            </button>
+            <button id="removeLastRowBtn" class="px-4 py-3 rounded-xl bg-zinc-900 hover:bg-red-950/60 active:scale-95 text-zinc-400 hover:text-red-400 font-bold text-sm border border-zinc-800 transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-minus"></i>
+                <span>마지막 줄 삭제</span>
+            </button>
+        </div>
+    </main>
+
+    <!-- 숨겨진 파일 업로드 Input -->
+    <input type="file" id="hiddenFileInput" accept="image/*" class="hidden">
+
+    <!-- 선택된 사진 편집 플로팅 툴바 (사진이 있는 칸 선택 시 하단에 나타남) -->
+    <div id="editorToolbar" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[94%] max-w-lg bg-zinc-900/95 backdrop-blur-lg border border-zinc-700 rounded-2xl p-3.5 shadow-2xl z-50 transition-all duration-300 translate-y-32 opacity-0 pointer-events-none">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-[#FFE600] flex items-center gap-1.5">
+                <i class="fa-solid fa-up-down-left-right"></i>
+                <span id="selectedSlotInfo">선택된 사진 크기 및 위치 조절</span>
+            </span>
+            <button id="closeToolbarBtn" class="text-zinc-400 hover:text-white text-xs px-2 py-0.5 rounded bg-zinc-800">
+                완료 <i class="fa-solid fa-check ml-1"></i>
+            </button>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- 축소 아이콘 -->
+            <button id="zoomOutBtn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+                <i class="fa-solid fa-magnifying-glass-minus text-xs"></i>
+            </button>
+
+            <!-- 크기 조절 슬라이더 -->
+            <div class="flex-1 flex flex-col">
+                <input type="range" id="zoomSlider" min="0.3" max="3.0" step="0.02" value="1" class="w-full">
+            </div>
+
+            <!-- 확대 아이콘 -->
+            <button id="zoomInBtn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+                <i class="fa-solid fa-magnifying-glass-plus text-xs"></i>
+            </button>
+
+            <!-- 사진 교체 버튼 -->
+            <button id="replaceImgBtn" class="px-3 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white border border-zinc-600 shrink-0 flex items-center gap-1">
+                <i class="fa-solid fa-image text-[#FFE600]"></i> 교체
+            </button>
+
+            <!-- 사진 삭제 버튼 -->
+            <button id="deleteImgBtn" class="w-8 h-8 rounded-lg bg-red-950/80 hover:bg-red-800 text-red-300 flex items-center justify-center shrink-0" title="사진 비우기">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 알림 토스트 메시지 박스 -->
+    <div id="toastMessage" class="fixed top-20 left-1/2 -translate-x-1/2 bg-zinc-800 text-white border border-zinc-600 px-4 py-2.5 rounded-full shadow-2xl text-sm font-medium z-50 transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none flex items-center gap-2">
+        <i class="fa-solid fa-circle-info text-[#FFE600]"></i>
+        <span id="toastText">메시지</span>
+    </div>
+
+    <!-- 커스텀 확인 모달 (confirm() 대체) -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2" id="modalTitle">초기화 확인</h3>
+            <p class="text-sm text-zinc-300 mb-6" id="modalDesc">모든 사진과 추가된 칸을 초기 상태로 되돌릴까요?</p>
+            <div class="flex justify-end gap-2">
+                <button id="modalCancelBtn" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-medium text-zinc-300">취소</button>
+                <button id="modalConfirmBtn" class="px-4 py-2 rounded-xl bg-[#FFE600] hover:bg-yellow-300 text-sm font-bold text-black">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 친구와 함께 쓰기(공유 방) 모달 -->
+    <div id="shareModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-share-nodes text-[#FFE600]"></i>
+                    <span>친구들에게 템플릿 공유하기</span>
+                </h3>
+                <button id="closeShareModalBtn" class="text-zinc-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- 현재 연결 상태 안내 -->
+            <div id="activeRoomBox" class="hidden mb-5 p-3.5 rounded-xl bg-indigo-950/60 border border-indigo-500/40">
+                <div class="flex items-center justify-between mb-1">
+                    <span id="syncModeBadge" class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        템플릿 배포 완료
+                    </span>
+                    <button id="leaveRoomBtn" class="text-xs text-red-400 hover:underline">해제</button>
+                </div>
+                <p id="activeRoomDesc" class="text-xs text-zinc-300 mb-2">친구에게 아래 링크(또는 코드)를 보내면 친구가 각자 자기만의 표를 채울 수 있어요!</p>
+                <div class="flex gap-2 mb-2">
+                    <input type="text" id="currentRoomCodeDisplay" readonly class="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono font-bold text-[#FFE600] select-all">
+                    <button id="copyRoomCodeBtn" class="px-3 py-2 rounded-lg bg-[#FFE600] hover:bg-yellow-300 text-black font-bold text-xs shrink-0">
+                        <i class="fa-solid fa-copy mr-1"></i>링크 복사
+                    </button>
+                </div>
+            </div>
+
+            <!-- 1. 덕틸리티 스타일: 빈 템플릿 배포하기 (각자 채우기) -->
+            <div class="mb-4 p-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/70">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="bg-[#FFE600] text-black text-[10px] font-black px-1.5 py-0.5 rounded">추천</span>
+                    <p class="text-xs font-bold text-white">1. 덕틸리티처럼 '틀(템플릿)' 배포하기</p>
+                </div>
+                <p class="text-[11px] text-zinc-400 mb-3">내가 넣은 캐릭터 사진과 제목을 원본으로 저장합니다. 친구들이 링크로 들어오면 각자 독립된 화면에서 자기만의 첫인상/현인상을 채울 수 있어요.</p>
+                <button id="publishTemplateBtn" class="w-full py-2.5 px-4 rounded-xl bg-[#FFE600] hover:bg-yellow-300 text-black font-bold text-sm transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>현재 표를 배포용 템플릿으로 저장 & 링크 생성</span>
+                </button>
+            </div>
+
+            <!-- 2. 실시간 공동 편집 방 만들기 -->
+            <div class="mb-4 p-3.5 rounded-xl bg-zinc-800/40 border border-zinc-800">
+                <p class="text-xs font-bold text-zinc-200 mb-1">2. 실시간으로 하나의 표 같이 채우기</p>
+                <p class="text-[11px] text-zinc-400 mb-2.5">친구와 동시에 접속해서 한 장의 표를 실시간으로 함께 꾸밉니다.</p>
+                <button id="createNewRoomBtn" class="w-full py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-user-group"></i>
+                    <span>실시간 공동 편집 방 만들기</span>
+                </button>
+            </div>
+
+            <div class="border-t border-zinc-800 my-4"></div>
+
+            <!-- 3. 친구 코드로 불러오기 -->
+            <div>
+                <p class="text-xs font-bold text-zinc-400 mb-2">3. 친구가 공유한 코드 또는 링크 입력하기</p>
+                <div class="flex gap-2">
+                    <input type="text" id="joinRoomCodeInput" placeholder="예: TPL-8492 또는 공유 URL" class="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FFE600]">
+                    <button id="joinRoomBtn" class="px-4 py-2 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white font-bold text-xs transition shrink-0">
+                        열기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 첫 번째 열 전용: 스텔라이브 멤버 15인 프리셋 선택 모달 -->
+    <div id="presetPickerModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl max-h-[88vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-star text-[#8B9EE7]"></i>
+                        <span>캐릭터 선택하기</span>
+                    </h3>
+                    <p class="text-xs text-zinc-400 mt-0.5">아래 멤버 중 선택하거나 내 갤러리에서 직접 사진을 올릴 수 있어요.</p>
+                </div>
+                <button id="closePresetModalBtn" class="text-zinc-400 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- 갤러리 직접 업로드 버튼 -->
+            <button id="presetGalleryUploadBtn" class="w-full mb-4 py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shrink-0">
+                <i class="fa-solid fa-folder-open text-[#FFE600]"></i>
+                <span>내 갤러리에서 다른 사진 직접 첨부하기</span>
+            </button>
+
+            <!-- 15명 프리셋 캐릭터 그리드 -->
+            <div id="presetGrid" class="grid grid-cols-3 sm:grid-cols-5 gap-2.5 overflow-y-auto pr-1 py-1">
+                <!-- JavaScript로 15개 캐릭터 버튼 생성 -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // ==========================================
+        // 스텔라이브 멤버 15인 프리셋 이미지 데이터
+        // ==========================================
+        const PRESET_CHARACTERS = [
+            { name: "멤버 1", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMkVB79DjCm7DQQfSxi1jC7z1Rp3D_9eZjKq60sMIf0BLxigFAWzYENb9vJK7_YfUHeIrQ6RRs6pb78faGcA5DMduQ2ztYoWyWH7_36iOPnTThIlSitVTy14ZOExSDp0koW95arbO0XDh2uApYo2zmo4.webp" },
+            { name: "멤버 2", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMshETqHuVO2kPTs6CyoLwAp--9CPpMoUwzsnrAN9TuKzYAv2gZ791fDgUcviBwvIhgb20G2zgw0GVi_Yy27D9iI3nNVM41h8JCaOuaGwEzbzKek5yuiBcP74I4QkH21m8FzCaByHYAVWb5-qBjPDDlM.webp" },
+            { name: "멤버 3", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMubO_GRW4ZLv3f0jLyAJ1_bECFwG5Afet13sMOOtFyCl-1WJ5_04hFaB7MPoUZ42dMboiFj3tJEhArCtavujsaBOSPoCqdcnGvxCishIeGROrU0CQJPDMHm5hdEGZDOZQ6DpPqd686edfXqKEHBNh8A.webp" },
+            { name: "멤버 4", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMpOCTko0JEKO5wMKwrhPzNhPuM8NqHizAsdhlHZrUzfCsbhUnL3vwf8Hf0fM_wEb0l_EhT1y18lggbQqvi5w3LHpZ741ObgA5zCjNGrwNaFfKkQ8p-v367D-zpF5vZ1PVvqhYxmE18AjKKV-fulfrJI.webp" },
+            { name: "멤버 5", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMkECPMu_XlTD6TrGHJa82UBb5Y7-n8PCzUiFOs57iQIaU1xR3zN9FQK1f__FgbRoo7NwQ1UOGilCrJXSW6MS3_uUX3tJHBBVGyxh9SmNmIj0DatfvMLA0T7W1fBmqINoJN9lqqmxwMgoH5GhSZRjyr8.webp" },
+            { name: "멤버 6", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMp_haFSpxBVpdoedZrqZPqpC33LtAcVYeCnTxT8zLC3rtktod6cQpUiWhaAZt0T344_5uTdjUzLDhqzmSKCci9MGV_ikszxHOHHWhYiHoLrcXueZnTIOOq7twl6RyBPDKarpuHIgzHuDZBal3_btrkM.webp" },
+            { name: "멤버 7", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMsR9om_LOL1rgdix91l13kG8BlycStYbOILkDqo9upX2SxkDpslKJ7qkLZfoAsyKaSMIJc2LqrjODHPbTzh2ePWHMNd3HU9wgbgBO-31YEZ3ZzrtR09NxMlAxlglrBe2a28m9IYq3LzVrYR2assTeVk.webp" },
+            { name: "멤버 8", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMi8IzvFjvYUZ1qmqDgMhKULQpntiH8x0IGXwaSW44jgElfZHuDUZZZx0Ot9NFuD6LCbgmVSO0gpJEXMkDvzlLE9ZSSzeyfQjzeBNYWU4QYhIK-uRuBeIvhz6ALTiA-j1TZs7m2Ve6ChXvBUzsD53zzk.webp" },
+            { name: "멤버 9", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMiAWQE0HLAUl_XKCiuV84gqcmV953FuNKsRVu_ZrZpB_aMrq6xW966qIp9qQSxSM1Kjs6vPje6vqURzmq2uHdlIZXkSbw0jF--WKfiv9SfCwiS7S-bqU6XzIAELRR5paRV2LOKCLC0TBO6Jw3MtRBK8.webp" },
+            { name: "멤버 10", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMv-_KbCRdKBMkLggvqB4x-fwwbxUuBXRAsUjChtuojXSJ5FHj7Wc3lqEqnUD-jhhgb0dz3BMqGOz55cYpsW6BuKnzkil85QoNAthguzEzJv46N0wnxDNg3mp0txWJnUDEchTd45KlRzM7lUl1D89-Fw.webp" },
+            { name: "멤버 11", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMuMafOpx1pd4s8MZ1NRtnFGLxIO43RtnSGmJ7tpK-VOmehVbDix_10KB8Kz_EUIyDlIAkriwmWHNGUgtK1NLnN_xxBq9OnMQ_YJixMD37K7CQww02iGvao-gm1JfLks1tpGq8Za24YJhYW9zGFz78Xs.webp" },
+            { name: "멤버 12", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMrFzLmDZvUr0a3f6RMATXfBrFMnSx9nSb5qCODaDJwT_0nbivTlDCZKl-JwGAEjjQzP_SkdM8h42uPfwFI7zIqbVsZZPQFOeJrFUYe5FovagxJzWt4S8I0EKYPe-ROrfs8WpNS6guudtNOBPLRRULsk.webp" },
+            { name: "멤버 13", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMqNUm-yaRQIczBC8nzr4Zyiw0P7XL-_I6xcFck7hA7RN1pfLXQ1vwV07estGDHK9xMa697ay2Q0wUjpHe0qO9nJfFMdIJisDo6o5Q2JyRVUjvYUFGxacrKrqslR3D7nkdhyfU-eweKQUUMCE3A60YC0.webp" },
+            { name: "멤버 14", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMhHdgIN25R-Cpq3-yOxAPiqL0WFWqthaecSZtQWF-Fn9bgKOoSJ3yPKew16sb7oGCb7X4KiwraEl_dggZ0HX8BG-Kdcs1220MFkKGSVyU1PKj4O4ix20YatmNMPILxskE-e5SVtL5385tmCeyotUyc8.webp" },
+            { name: "멤버 15", url: "https://i.namu.wiki/i/QP87aAZz7ALLAG6nMAHLMjGyKzH0NE0LsyGq-243lOuPzWnVWnGLKK1Ox5nAK7OdPJusBbCsF9B41iRrnIp8xxBJliqWrLuQJYkelsLiT-BzasaPKZvnqks6FD0XK5fTlDLwC9bq3SCXZXdKpB4v_c2D2cyEuQ75p9sah07eLXo.webp" }
+        ];
+
+        // ==========================================
+        // 클라우드 실시간 동기화 설정 (정적 호스팅 호환용 로컬 안전 처리)
+        // ==========================================
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let activeRoomId = null;
+        let roomMode = 'collab';
+        let unsubscribeRoom = null;
+        let isApplyingRemoteUpdate = false;
+        let syncDebounceTimer = null;
+
+        async function initCloudSync() {
+            // 정적 웹 호스팅(GitHub Pages 등)에서는 별도 서버 없이 즉시 로컬 모드로 작동
+            return Promise.resolve();
+        }
+
+        // 이미지를 Firestore 문서 용량 제한(1MB)에 맞게 자동 최적화 압축
+        function compressImageDataUrl(dataUrl, maxDim = 420, quality = 0.78) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
+        // 현재 보드 상태를 클라우드에 저장
+        function scheduleCloudSync() {
+            // 'template' 모드에서는 친구가 자기 화면을 수정해도 원본 템플릿을 덮어쓰지 않음
+            if (!activeRoomId || roomMode !== 'collab' || !db || !currentUser || isApplyingRemoteUpdate) return;
+            clearTimeout(syncDebounceTimer);
+            syncDebounceTimer = setTimeout(async () => {
+                await pushBoardToCloud(activeRoomId, 'collab');
+            }, 350);
+        }
+
+        async function pushBoardToCloud(targetId, mode = 'template') {
+            if (!db || !currentUser) return false;
+            try {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'impression_rooms', targetId);
+                const payload = {
+                    mode: mode,
+                    mainTitle: document.getElementById('mainTitleInput').value,
+                    titleColor: document.getElementById('titleColorInput').value,
+                    subTitle: document.getElementById('subTitleInput').value,
+                    col1Header: document.getElementById('col1Header').textContent,
+                    col2Header: document.getElementById('col2Header').textContent,
+                    isDarkTheme: isDarkTheme,
+                    rowsJson: JSON.stringify(rowsData),
+                    updatedAt: Date.now(),
+                    updatedBy: currentUser.uid
+                };
+                await setDoc(roomRef, payload, { merge: true });
+                return true;
+            } catch (err) {
+                console.error("Sync push error:", err);
+                showToast('용량이 너무 커서 저장에 실패했습니다. 사진 수를 줄여보세요.');
+                return false;
+            }
+        }
+
+        function applyBoardData(data) {
+            isApplyingRemoteUpdate = true;
+            try {
+                if (typeof data.mainTitle === 'string') {
+                    document.getElementById('mainTitleInput').value = data.mainTitle;
+                    document.getElementById('displayMainTitle').textContent = data.mainTitle || ' ';
+                }
+                if (typeof data.titleColor === 'string') {
+                    document.getElementById('titleColorInput').value = data.titleColor;
+                    document.getElementById('displayMainTitle').style.color = data.titleColor;
+                }
+                if (typeof data.subTitle === 'string') {
+                    document.getElementById('subTitleInput').value = data.subTitle;
+                    document.getElementById('displaySubTitle').textContent = data.subTitle || ' ';
+                }
+                if (typeof data.col1Header === 'string') {
+                    document.getElementById('col1Header').textContent = data.col1Header;
+                }
+                if (typeof data.col2Header === 'string') {
+                    document.getElementById('col2Header').textContent = data.col2Header;
+                }
+                if (typeof data.isDarkTheme === 'boolean' && data.isDarkTheme !== isDarkTheme) {
+                    isDarkTheme = data.isDarkTheme;
+                    applyThemeUI();
+                }
+                if (data.rowsJson) {
+                    const parsedRows = JSON.parse(data.rowsJson);
+                    if (Array.isArray(parsedRows)) {
+                        rowsData = parsedRows;
+                        renderAllRows();
+                    }
+                }
+            } finally {
+                isApplyingRemoteUpdate = false;
+            }
+        }
+
+        function buildShareUrl(code) {
+            try {
+                const url = new URL(window.location.href);
+                if (url.protocol.startsWith('http')) {
+                    url.searchParams.set('tpl', code);
+                    return url.toString();
+                }
+            } catch (e) {}
+            return code;
+        }
+
+        // 공유 방 / 템플릿 연결
+        async function connectToRoom(rawInput, forcedMode = null) {
+            if (!db || !currentUser) {
+                showToast('연결 준비 중입니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+
+            // URL이 입력된 경우 ?tpl= 코드 추출
+            let extractedCode = rawInput.trim();
+            try {
+                if (extractedCode.includes('tpl=')) {
+                    const urlObj = new URL(extractedCode);
+                    extractedCode = urlObj.searchParams.get('tpl') || extractedCode;
+                }
+            } catch (e) {}
+
+            activeRoomId = extractedCode.toUpperCase();
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'impression_rooms', activeRoomId);
+
+            if (forcedMode === 'template') {
+                roomMode = 'template';
+                updateShareModalUI(activeRoomId, 'template');
+                return;
+            }
+
+            // 기존 데이터 확인 후 모드 결정
+            try {
+                const snap = await getDoc(roomRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    roomMode = forcedMode || data.mode || 'template';
+                    applyBoardData(data);
+
+                    if (roomMode === 'collab') {
+                        unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                const d = docSnap.data();
+                                if (d.updatedBy === currentUser.uid && isDragging) return;
+                                applyBoardData(d);
+                            }
+                        });
+                    }
+                    updateShareModalUI(activeRoomId, roomMode);
+                } else if (forcedMode === 'collab') {
+                    roomMode = 'collab';
+                    unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const d = docSnap.data();
+                            if (d.updatedBy === currentUser.uid && isDragging) return;
+                            applyBoardData(d);
+                        }
+                    });
+                    updateShareModalUI(activeRoomId, 'collab');
+                } else {
+                    showToast('존재하지 않는 템플릿 코드입니다.');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('템플릿을 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        function updateShareModalUI(code, mode) {
+            document.getElementById('roomStatusLabel').textContent = code;
+            document.getElementById('activeRoomBox').classList.remove('hidden');
+            document.getElementById('currentRoomCodeDisplay').value = buildShareUrl(code);
+
+            const badge = document.getElementById('syncModeBadge');
+            const desc = document.getElementById('activeRoomDesc');
+            if (mode === 'template') {
+                badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-[#FFE600]"></span> 배포용 템플릿 활성화됨';
+                desc.textContent = '친구에게 아래 링크(또는 코드)를 공유하세요! 친구가 열면 원본은 유지된 채 각자 자기만의 표를 채울 수 있어요.';
+            } else {
+                badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 실시간 공동 편집 중';
+                desc.textContent = '같은 코드를 입력한 친구들과 실시간으로 하나의 표를 함께 꾸미고 있습니다.';
+            }
+        }
+
+        function disconnectRoom() {
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+            activeRoomId = null;
+            roomMode = 'collab';
+            document.getElementById('roomStatusLabel').textContent = '템플릿 공유';
+            document.getElementById('activeRoomBox').classList.add('hidden');
+            showToast('공유 연결이 해제되었습니다.');
+        }
+
+        // ==========================================
+        // 상태 관리 (State)
+        // ==========================================
+        let rowsData = []; // 각 행의 데이터 저장: { id, cells: [ { imgSrc, scale, x, y }, { imgSrc, scale, x, y }, { imgSrc, scale, x, y } ] }
+        let selectedCell = null; // 현재 선택된 셀 { rowIndex, colIndex, element }
+        let isDarkTheme = true;
+        let currentUploadTarget = null; // 파일 업로드 대상 { rowIndex, colIndex }
+
+        // 드래그 상태
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let initialImgX = 0;
+        let initialImgY = 0;
+
+        // DOM 요소 참조
+        const rowsContainer = document.getElementById('rowsContainer');
+        const hiddenFileInput = document.getElementById('hiddenFileInput');
+        const editorToolbar = document.getElementById('editorToolbar');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const captureArea = document.getElementById('captureArea');
+
+        // ==========================================
+        // 초기화 및 렌더링 함수
+        // ==========================================
+        function initApp() {
+            // 기본 5행 생성 (첨부된 템플릿 이미지와 동일한 5줄 구성)
+            rowsData = [];
+            for (let i = 0; i < 5; i++) {
+                rowsData.push(createEmptyRowData());
+            }
+            renderPresetGrid();
+            renderAllRows();
+            setupEventListeners();
+        }
+
+        // 15인 캐릭터 선택 그리드 렌더링
+        function renderPresetGrid() {
+            const grid = document.getElementById('presetGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            PRESET_CHARACTERS.forEach((char, idx) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'group relative aspect-square rounded-xl overflow-hidden bg-white border-2 border-zinc-700 hover:border-[#8B9EE7] transition focus:outline-none';
+                btn.innerHTML = `
+                    <img src="${char.url}" alt="${char.name}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" referrerpolicy="no-referrer">
+                    <span class="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">#${idx + 1}</span>
+                `;
+                btn.addEventListener('click', () => {
+                    applyPresetCharacterToCell(char.url);
+                });
+                grid.appendChild(btn);
+            });
+        }
+
+        // 선택한 프리셋 캐릭터 이미지를 셀에 적용
+        function applyPresetCharacterToCell(imageUrl) {
+            if (!currentUploadTarget) return;
+            const { rowIndex, colIndex } = currentUploadTarget;
+
+            const targetSlot = document.querySelector(`.image-slot[data-row="${rowIndex}"][data-col="${colIndex}"]`);
+            const slotSize = targetSlot ? targetSlot.clientWidth : 200;
+
+            const tempImg = new Image();
+            tempImg.onload = () => {
+                const minSide = Math.min(tempImg.width, tempImg.height) || 400;
+                const initialScale = slotSize / minSide;
+
+                rowsData[rowIndex].cells[colIndex] = {
+                    imgSrc: imageUrl,
+                    scale: initialScale,
+                    x: 0,
+                    y: 0
+                };
+
+                closePresetModal();
+                renderAllRows();
+                const newSlot = document.querySelector(`.image-slot[data-row="${rowIndex}"][data-col="${colIndex}"]`);
+                selectSlot(rowIndex, colIndex, newSlot);
+                scheduleCloudSync();
+                showToast('캐릭터가 선택되었습니다!');
+            };
+            tempImg.onerror = () => {
+                // 외부 이미지 로드 실패 시에도 기본 스케일로 삽입
+                rowsData[rowIndex].cells[colIndex] = {
+                    imgSrc: imageUrl,
+                    scale: slotSize / 400,
+                    x: 0,
+                    y: 0
+                };
+                closePresetModal();
+                renderAllRows();
+                scheduleCloudSync();
+            };
+            tempImg.src = imageUrl;
+        }
+
+        function openPresetModal(rowIndex, colIndex) {
+            currentUploadTarget = { rowIndex, colIndex };
+            const modal = document.getElementById('presetPickerModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePresetModal() {
+            const modal = document.getElementById('presetPickerModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function createEmptyRowData() {
+            return {
+                id: 'row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                cells: [
+                    { imgSrc: null, scale: 1, x: 0, y: 0 }, // 0: 캐릭터 사진
+                    { imgSrc: null, scale: 1, x: 0, y: 0 }, // 1: 첫인상 사진
+                    { imgSrc: null, scale: 1, x: 0, y: 0 }  // 2: 현인상 사진
+                ]
+            };
+        }
+
+        // 전체 행 렌더링
+        function renderAllRows() {
+            rowsContainer.innerHTML = '';
+            rowsData.forEach((row, rowIndex) => {
+                const rowEl = document.createElement('div');
+                rowEl.className = 'grid grid-cols-3 gap-3 sm:gap-5 relative group';
+                rowEl.dataset.rowIndex = rowIndex;
+
+                // 개별 행 삭제 버튼 (캡처 시에는 숨겨짐, 마우스 호버 시 우측 상단에 표시)
+                if (rowsData.length > 1) {
+                    const delRowBtn = document.createElement('button');
+                    delRowBtn.className = 'delete-row-btn no-capture absolute -right-2 -top-2 sm:-right-3 sm:-top-3 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-20';
+                    delRowBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                    delRowBtn.title = '이 줄 삭제';
+                    delRowBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteRow(rowIndex);
+                    };
+                    rowEl.appendChild(delRowBtn);
+                }
+
+                // 3개의 열(캐릭터, 첫인상, 현인상) 생성
+                row.cells.forEach((cellData, colIndex) => {
+                    const slotEl = createSlotElement(rowIndex, colIndex, cellData);
+                    rowEl.appendChild(slotEl);
+                });
+
+                rowsContainer.appendChild(rowEl);
+            });
+        }
+
+        // 개별 이미지 슬롯(칸) 생성
+        function createSlotElement(rowIndex, colIndex, cellData) {
+            const slot = document.createElement('div');
+            const bgClass = isDarkTheme ? 'bg-white' : 'bg-zinc-100 border border-zinc-300';
+            slot.className = `image-slot ${bgClass} cursor-pointer flex items-center justify-center select-none`;
+            slot.dataset.row = rowIndex;
+            slot.dataset.col = colIndex;
+
+            if (selectedCell && selectedCell.rowIndex === rowIndex && selectedCell.colIndex === colIndex) {
+                slot.classList.add('active-slot');
+            }
+
+            if (cellData.imgSrc) {
+                // 이미지가 등록된 상태
+                const img = document.createElement('img');
+                img.src = cellData.imgSrc;
+                img.className = 'slot-img';
+                img.draggable = false;
+                img.referrerPolicy = 'no-referrer';
+                updateImageTransform(img, cellData);
+
+                // 마우스/터치 드래그 이벤트 바인딩
+                img.addEventListener('mousedown', (e) => startDrag(e, rowIndex, colIndex, slot, img));
+                img.addEventListener('touchstart', (e) => startDrag(e, rowIndex, colIndex, slot, img), { passive: false });
+
+                // 휠 스크롤로 즉시 확대/축소 지원
+                slot.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    selectSlot(rowIndex, colIndex, slot);
+                    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+                    adjustZoom(delta);
+                }, { passive: false });
+
+                slot.appendChild(img);
+            } else {
+                // 비어 있는 슬롯 안내 플레이스홀더
+                const placeholder = document.createElement('div');
+                placeholder.className = 'no-capture flex flex-col items-center justify-center text-zinc-400 p-2 text-center pointer-events-none';
+                const labels = ['캐릭터 선택', '첫인상 사진', '현인상 사진'];
+                const icons = ['fa-users', 'fa-image', 'fa-image'];
+
+                placeholder.innerHTML = `
+                    <i class="fa-solid ${icons[colIndex]} text-lg sm:text-2xl mb-1 text-zinc-300"></i>
+                    <span class="text-[10px] sm:text-xs font-bold text-zinc-400">${labels[colIndex]}</span>
+                    <span class="text-[9px] text-zinc-300 hidden sm:inline">${colIndex === 0 ? '목록 선택 / 첨부' : '클릭하여 첨부'}</span>
+                `;
+                slot.appendChild(placeholder);
+
+                // 첫 번째 열(colIndex === 0)은 15인 선택 모달 오픈, 나머지 열은 바로 갤러리 오픈
+                slot.addEventListener('click', () => {
+                    if (colIndex === 0) {
+                        openPresetModal(rowIndex, colIndex);
+                    } else {
+                        triggerFileUpload(rowIndex, colIndex);
+                    }
+                });
+            }
+
+            return slot;
+        }
+
+        // 이미지 위치 및 크기 CSS Transform 적용
+        function updateImageTransform(imgEl, cellData) {
+            imgEl.style.transform = `translate(calc(-50% + ${cellData.x}px), calc(-50% + ${cellData.y}px)) scale(${cellData.scale})`;
+        }
+
+        // ==========================================
+        // 사진 첨부 및 크기/위치 조절 로직
+        // ==========================================
+        function triggerFileUpload(rowIndex, colIndex) {
+            currentUploadTarget = { rowIndex, colIndex };
+            hiddenFileInput.value = '';
+            hiddenFileInput.click();
+        }
+
+        hiddenFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file || !currentUploadTarget) return;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                // 친구와 실시간 공유 시 용량 초과를 막기 위해 자동 최적화 리사이징 적용
+                const optimizedDataUrl = await compressImageDataUrl(event.target.result, 450, 0.82);
+
+                const img = new Image();
+                img.onload = () => {
+                    const { rowIndex, colIndex } = currentUploadTarget;
+                    // 이미지가 정사각형 칸을 꽉 채우도록 초기 배율 자동 계산
+                    const targetSlot = document.querySelector(`.image-slot[data-row="${rowIndex}"][data-col="${colIndex}"]`);
+                    const slotSize = targetSlot ? targetSlot.clientWidth : 200;
+                    
+                    const minSide = Math.min(img.width, img.height);
+                    const initialScale = slotSize / minSide;
+
+                    rowsData[rowIndex].cells[colIndex] = {
+                        imgSrc: optimizedDataUrl,
+                        scale: initialScale,
+                        x: 0,
+                        y: 0
+                    };
+
+                    renderAllRows();
+                    const newSlot = document.querySelector(`.image-slot[data-row="${rowIndex}"][data-col="${colIndex}"]`);
+                    selectSlot(rowIndex, colIndex, newSlot);
+                    scheduleCloudSync();
+                    showToast('사진이 등록되었습니다. 드래그하여 위치를 조절하세요!');
+                };
+                img.src = optimizedDataUrl;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 슬롯 선택 및 하단 편집 툴바 표시
+        function selectSlot(rowIndex, colIndex, slotEl) {
+            // 기존 선택 해제
+            document.querySelectorAll('.image-slot').forEach(el => el.classList.remove('active-slot'));
+            
+            selectedCell = { rowIndex, colIndex, element: slotEl };
+            if (slotEl) slotEl.classList.add('active-slot');
+
+            const cellData = rowsData[rowIndex].cells[colIndex];
+            if (cellData && cellData.imgSrc) {
+                const colNames = ['캐릭터', '첫인상', '현인상'];
+                document.getElementById('selectedSlotInfo').textContent = `${rowIndex + 1}번째 줄 · ${colNames[colIndex]} 사진 조절`;
+                
+                // 슬라이더 범위 동적 설정 (초기 배율 기준 0.3배 ~ 3배)
+                zoomSlider.min = (cellData.scale * 0.25).toFixed(3);
+                zoomSlider.max = (cellData.scale * 3.5).toFixed(3);
+                zoomSlider.step = (cellData.scale * 0.02).toFixed(4);
+                zoomSlider.value = cellData.scale;
+
+                editorToolbar.classList.remove('translate-y-32', 'opacity-0', 'pointer-events-none');
+            } else {
+                closeToolbar();
+            }
+        }
+
+        function closeToolbar() {
+            document.querySelectorAll('.image-slot').forEach(el => el.classList.remove('active-slot'));
+            selectedCell = null;
+            editorToolbar.classList.add('translate-y-32', 'opacity-0', 'pointer-events-none');
+        }
+
+        // 드래그 시작 (마우스 & 터치 공통)
+        function startDrag(e, rowIndex, colIndex, slotEl, imgEl) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            selectSlot(rowIndex, colIndex, slotEl);
+            isDragging = true;
+
+            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+            dragStartX = clientX;
+            dragStartY = clientY;
+
+            const cellData = rowsData[rowIndex].cells[colIndex];
+            initialImgX = cellData.x;
+            initialImgY = cellData.y;
+
+            const onMove = (moveEvent) => {
+                if (!isDragging) return;
+                const curX = moveEvent.type.includes('touch') ? moveEvent.touches[0].clientX : moveEvent.clientX;
+                const curY = moveEvent.type.includes('touch') ? moveEvent.touches[0].clientY : moveEvent.clientY;
+
+                const dx = curX - dragStartX;
+                const dy = curY - dragStartY;
+
+                cellData.x = initialImgX + dx;
+                cellData.y = initialImgY + dy;
+
+                updateImageTransform(imgEl, cellData);
+            };
+
+            const onEnd = () => {
+                isDragging = false;
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onEnd);
+                window.removeEventListener('touchmove', onMove);
+                window.removeEventListener('touchend', onEnd);
+                scheduleCloudSync();
+            };
+
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onEnd);
+            window.addEventListener('touchmove', onMove, { passive: false });
+            window.addEventListener('touchend', onEnd);
+        }
+
+        // 줌 비율 조절 함수
+        function adjustZoom(deltaRatio) {
+            if (!selectedCell) return;
+            const { rowIndex, colIndex, element } = selectedCell;
+            const cellData = rowsData[rowIndex].cells[colIndex];
+            if (!cellData || !cellData.imgSrc) return;
+
+            const newScale = Math.max(0.05, cellData.scale * (1 + deltaRatio));
+            cellData.scale = newScale;
+            zoomSlider.value = newScale;
+
+            const imgEl = element.querySelector('.slot-img');
+            if (imgEl) updateImageTransform(imgEl, cellData);
+            scheduleCloudSync();
+        }
+
+        // ==========================================
+        // 행 추가 / 삭제 및 테마 변경
+        // ==========================================
+        function addRow() {
+            rowsData.push(createEmptyRowData());
+            renderAllRows();
+            scheduleCloudSync();
+            showToast(`새로운 줄이 추가되었습니다. (총 ${rowsData.length}줄)`);
+        }
+
+        function deleteRow(index) {
+            if (rowsData.length <= 1) {
+                showToast('최소 1줄은 유지되어야 합니다.');
+                return;
+            }
+            if (selectedCell && selectedCell.rowIndex === index) {
+                closeToolbar();
+            }
+            rowsData.splice(index, 1);
+            renderAllRows();
+            scheduleCloudSync();
+            showToast('해당 줄이 삭제되었습니다.');
+        }
+
+        function changeGap(mode) {
+            const colHeaders = document.getElementById('columnHeaders');
+            if (mode === 'tight') {
+                colHeaders.className = 'grid grid-cols-3 gap-1.5 sm:gap-2 mb-1.5 text-center';
+                rowsContainer.className = 'flex flex-col gap-1.5 sm:gap-2';
+            } else {
+                colHeaders.className = 'grid grid-cols-3 gap-3 sm:gap-5 mb-2 sm:mb-3 text-center';
+                rowsContainer.className = 'flex flex-col gap-3 sm:gap-5';
+            }
+        }
+        window.changeGap = changeGap;
+
+        function applyThemeUI() {
+            const themeLabel = document.getElementById('themeLabel');
+            if (isDarkTheme) {
+                captureArea.style.backgroundColor = '#000000';
+                captureArea.style.color = '#ffffff';
+                themeLabel.textContent = '다크 테마';
+            } else {
+                captureArea.style.backgroundColor = '#ffffff';
+                captureArea.style.color = '#111111';
+                themeLabel.textContent = '화이트 테마';
+            }
+        }
+
+        // ==========================================
+        // 고화질 이미지 다운로드 (html2canvas)
+        // ==========================================
+        async function downloadTemplateImage() {
+            closeToolbar();
+            const btn = document.getElementById('downloadBtn');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>생성 중...</span>';
+            btn.disabled = true;
+
+            // 캡처 시 불필요한 UI(플레이스홀더 텍스트, 행 삭제 버튼) 임시 숨김
+            const noCaptureEls = document.querySelectorAll('.no-capture');
+            noCaptureEls.forEach(el => el.style.visibility = 'hidden');
+
+            try {
+                // 폰트 로딩 및 렌더링 안정화 대기
+                await new Promise(resolve => setTimeout(resolve, 150));
+
+                const canvas = await html2canvas(captureArea, {
+                    scale: 2, // 레티나 고화질 출력
+                    backgroundColor: isDarkTheme ? '#000000' : '#ffffff',
+                    useCORS: true,
+                    logging: false
+                });
+
+                const mainTitle = document.getElementById('mainTitleInput').value.trim() || '첫인상_현인상';
+                const link = document.createElement('a');
+                link.download = `${mainTitle}_첫인상현인상표.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                showToast('이미지가 성공적으로 저장되었습니다!');
+            } catch (err) {
+                console.error(err);
+                showToast('이미지 저장 중 오류가 발생했습니다.');
+            } finally {
+                // 숨겼던 UI 복구
+                noCaptureEls.forEach(el => el.style.visibility = 'visible');
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+
+        // ==========================================
+        // 유틸리티 & 이벤트 리스너 설정
+        // ==========================================
+        function showToast(msg) {
+            const toast = document.getElementById('toastMessage');
+            document.getElementById('toastText').textContent = msg;
+            toast.classList.remove('opacity-0', '-translate-y-4');
+            clearTimeout(window.toastTimer);
+            window.toastTimer = setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-4');
+            }, 2600);
+        }
+
+        function setupEventListeners() {
+            // 타이틀 실시간 반영
+            const mainTitleInput = document.getElementById('mainTitleInput');
+            const displayMainTitle = document.getElementById('displayMainTitle');
+            mainTitleInput.addEventListener('input', (e) => {
+                displayMainTitle.textContent = e.target.value || ' ';
+                scheduleCloudSync();
+            });
+
+            // 타이틀 컬러 실시간 반영
+            const titleColorInput = document.getElementById('titleColorInput');
+            titleColorInput.addEventListener('input', (e) => {
+                displayMainTitle.style.color = e.target.value;
+                scheduleCloudSync();
+            });
+
+            // 서브 타이틀 실시간 반영
+            const subTitleInput = document.getElementById('subTitleInput');
+            const displaySubTitle = document.getElementById('displaySubTitle');
+            subTitleInput.addEventListener('input', (e) => {
+                displaySubTitle.textContent = e.target.value || ' ';
+                scheduleCloudSync();
+            });
+
+            // 열 헤더 수정 시 동기화
+            document.getElementById('col1Header').addEventListener('input', scheduleCloudSync);
+            document.getElementById('col2Header').addEventListener('input', scheduleCloudSync);
+
+            // 행 추가 / 마지막 줄 삭제 버튼
+            document.getElementById('addRowBtn').addEventListener('click', addRow);
+            document.getElementById('removeLastRowBtn').addEventListener('click', () => {
+                deleteRow(rowsData.length - 1);
+            });
+
+            // 하단 툴바 컨트롤
+            zoomSlider.addEventListener('input', (e) => {
+                if (!selectedCell) return;
+                const { rowIndex, colIndex, element } = selectedCell;
+                const cellData = rowsData[rowIndex].cells[colIndex];
+                if (!cellData || !cellData.imgSrc) return;
+
+                cellData.scale = parseFloat(e.target.value);
+                const imgEl = element.querySelector('.slot-img');
+                if (imgEl) updateImageTransform(imgEl, cellData);
+                scheduleCloudSync();
+            });
+
+            document.getElementById('zoomInBtn').addEventListener('click', () => adjustZoom(0.12));
+            document.getElementById('zoomOutBtn').addEventListener('click', () => adjustZoom(-0.12));
+            document.getElementById('closeToolbarBtn').addEventListener('click', closeToolbar);
+
+            // 사진 교체 (첫 번째 열이면 15인 선택 모달, 나머지 열이면 갤러리 열기)
+            document.getElementById('replaceImgBtn').addEventListener('click', () => {
+                if (!selectedCell) return;
+                if (selectedCell.colIndex === 0) {
+                    openPresetModal(selectedCell.rowIndex, selectedCell.colIndex);
+                } else {
+                    triggerFileUpload(selectedCell.rowIndex, selectedCell.colIndex);
+                }
+            });
+
+            // 프리셋 선택 모달 내부 버튼 연결
+            document.getElementById('closePresetModalBtn').addEventListener('click', closePresetModal);
+            document.getElementById('presetGalleryUploadBtn').addEventListener('click', () => {
+                closePresetModal();
+                if (currentUploadTarget) {
+                    triggerFileUpload(currentUploadTarget.rowIndex, currentUploadTarget.colIndex);
+                }
+            });
+
+            // 사진 비우기
+            document.getElementById('deleteImgBtn').addEventListener('click', () => {
+                if (!selectedCell) return;
+                const { rowIndex, colIndex } = selectedCell;
+                rowsData[rowIndex].cells[colIndex] = { imgSrc: null, scale: 1, x: 0, y: 0 };
+                closeToolbar();
+                renderAllRows();
+                scheduleCloudSync();
+                showToast('사진이 제거되었습니다.');
+            });
+
+            // 다크 / 화이트 테마 전환
+            document.getElementById('toggleThemeBtn').addEventListener('click', () => {
+                isDarkTheme = !isDarkTheme;
+                applyThemeUI();
+                renderAllRows();
+                scheduleCloudSync();
+            });
+
+            // 친구와 함께 쓰기(공유 방) 모달 컨트롤
+            const shareModal = document.getElementById('shareModal');
+            document.getElementById('shareRoomBtn').addEventListener('click', () => {
+                shareModal.classList.remove('hidden');
+                shareModal.classList.add('flex');
+            });
+            document.getElementById('closeShareModalBtn').addEventListener('click', () => {
+                shareModal.classList.add('hidden');
+                shareModal.classList.remove('flex');
+            });
+
+            // 1. 덕틸리티 스타일: 현재 표를 배포용 원본 템플릿으로 저장
+            document.getElementById('publishTemplateBtn').addEventListener('click', async () => {
+                const randomCode = 'TPL-' + Math.floor(1000 + Math.random() * 9000);
+                const ok = await pushBoardToCloud(randomCode, 'template');
+                if (ok) {
+                    await connectToRoom(randomCode, 'template');
+                    showToast(`배포용 템플릿(${randomCode})이 생성되었습니다!`);
+                }
+            });
+
+            // 2. 실시간 공동 편집 방 만들기
+            document.getElementById('createNewRoomBtn').addEventListener('click', async () => {
+                const randomCode = 'LIVE-' + Math.floor(1000 + Math.random() * 9000);
+                await connectToRoom(randomCode, 'collab');
+                await pushBoardToCloud(randomCode, 'collab');
+                showToast(`실시간 공동 편집 방(${randomCode})이 생성되었습니다!`);
+            });
+
+            // 3. 친구 코드 또는 링크로 열기
+            document.getElementById('joinRoomBtn').addEventListener('click', async () => {
+                const codeInput = document.getElementById('joinRoomCodeInput').value.trim();
+                if (!codeInput) {
+                    showToast('공유 코드 또는 링크를 입력해주세요.');
+                    return;
+                }
+                await connectToRoom(codeInput);
+                shareModal.classList.add('hidden');
+                shareModal.classList.remove('flex');
+                showToast('템플릿을 불러왔습니다! 자유롭게 채워보세요.');
+            });
+
+            document.getElementById('leaveRoomBtn').addEventListener('click', disconnectRoom);
+
+            document.getElementById('copyRoomCodeBtn').addEventListener('click', () => {
+                const codeInput = document.getElementById('currentRoomCodeDisplay');
+                codeInput.select();
+                document.execCommand('copy');
+                showToast('공유 링크/코드가 클립보드에 복사되었습니다!');
+            });
+
+            // 다운로드 버튼
+            document.getElementById('downloadBtn').addEventListener('click', downloadTemplateImage);
+
+            // 초기화 모달 처리
+            const confirmModal = document.getElementById('confirmModal');
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                confirmModal.classList.remove('hidden');
+                confirmModal.classList.add('flex');
+            });
+            document.getElementById('modalCancelBtn').addEventListener('click', () => {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+            });
+            document.getElementById('modalConfirmBtn').addEventListener('click', () => {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+                closeToolbar();
+                rowsData = [];
+                for (let i = 0; i < 5; i++) {
+                    rowsData.push(createEmptyRowData());
+                }
+                renderAllRows();
+                scheduleCloudSync();
+                showToast('표가 초기화되었습니다.');
+            });
+
+            // 캔버스 바깥 클릭 시 선택 해제
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.image-slot') && !e.target.closest('#editorToolbar')) {
+                    closeToolbar();
+                }
+            });
+        }
+
+        // 앱 시작
+        window.onload = async function () {
+            await initCloudSync();
+            initApp();
+
+            // URL에 ?tpl=코드 가 붙어서 접속한 경우 자동으로 해당 템플릿 불러오기
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const tplParam = params.get('tpl');
+                if (tplParam) {
+                    await connectToRoom(tplParam);
+                    showToast(`공유된 템플릿(${tplParam.toUpperCase()})을 불러왔습니다!`);
+                }
+            } catch (e) {}
+        };
+    </script>
+</body>
+</html>
